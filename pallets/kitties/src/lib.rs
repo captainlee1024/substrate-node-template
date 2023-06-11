@@ -16,11 +16,15 @@ pub mod pallet {
 	use frame_support::pallet_prelude::*;
 	use frame_system::pallet_prelude::*;
 
-	use frame_support::traits::Randomness;
+	// ReservableCurrency 提供质押功能
+	use frame_support::traits::{Currency, Randomness, ReservableCurrency};
 	use sp_io::hashing::blake2_128;
 
 	// 我们需要根据一个Id来快速找到一个kitty, 需要定义一个类型 kitty-id
 	pub type KittyId = u32;
+	// 我们使用的Currency trait它会在自己的内部定义Balance 的 type
+	pub type BalanceOf<T> =
+		<<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 	// 需要一个保存Kitty主题的结构
 	// 要在链上存储需要一些特这个比如Encode Decode TypeInfo MaxEncodeLen...
@@ -38,6 +42,10 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
+		type Currency: ReservableCurrency<Self::AccountId>;
+		// Balance 并没有在system里确定类型, 需要在使用的地方定义类型
+		#[pallet::constant]
+		type KittyPrice: Get<BalanceOf<Self>>;
 	}
 
 	// The pallet's runtime storage items.
@@ -53,6 +61,10 @@ pub mod pallet {
 	#[pallet::storage]
 	#[pallet::getter(fn kitty_owner)]
 	pub type KittyOwner<T: Config> = StorageMap<_, Blake2_128Concat, KittyId, T::AccountId>;
+
+	#[pallet::storage]
+	#[pallet::getter(fn kitty_on_sale)]
+	pub type KittyOnSale<T: Config> = StorageMap<_, Blake2_128Concat, KittyId, ()>;
 
 	#[pallet::storage]
 	#[pallet::getter(fn kitty_parents)]
@@ -81,6 +93,14 @@ pub mod pallet {
 			recipient: T::AccountId,
 			kitty_id: KittyId,
 		},
+		KittyOnSale {
+			who: T::AccountId,
+			kitty_id: KittyId,
+		},
+		KittyBought {
+			who: T::AccountId,
+			kitty_id: KittyId,
+		},
 	}
 
 	// Errors inform users that something went wrong.
@@ -91,6 +111,10 @@ pub mod pallet {
 		SameKittyId,
 		NotOwner,
 		KittyIdOverflow,
+		AlreadyOnSale,
+		NotOnSale,
+		NoOwner,
+		AlreadyOwned,
 	}
 
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
@@ -108,6 +132,10 @@ pub mod pallet {
 			let kitty_id = Self::get_next_id()?;
 			//			let kitty = Kitty(Default::default());
 			let kitty = Kitty(Self::random_value(&who));
+
+			// 根据价格 质押token
+			let price = T::KittyPrice::get();
+			T::Currency::reserve(&who, price)?;
 
 			Kitties::<T>::insert(kitty_id, &kitty);
 			KittyOwner::<T>::insert(kitty_id, &who);
@@ -144,6 +172,10 @@ pub mod pallet {
 			}
 			let kitty = Kitty(data);
 
+			// 根据价格 质押token
+			let price = T::KittyPrice::get();
+			T::Currency::reserve(&who, price)?;
+
 			Kitties::<T>::insert(kitty_id, &kitty);
 			KittyOwner::<T>::insert(kitty_id, &who);
 			KittyParents::<T>::insert(kitty_id, (kitty_id_1, kitty_id_2));
@@ -167,6 +199,54 @@ pub mod pallet {
 			KittyOwner::<T>::insert(kitty_id, &recipient);
 
 			Self::deposit_event(Event::KittyTransferred { who, recipient, kitty_id });
+			Ok(())
+		}
+
+		#[pallet::call_index(3)]
+		#[pallet::weight(10_000)]
+		pub fn sale(origin: OriginFor<T>, kitty_id: KittyId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+			Self::kitties(kitty_id).ok_or::<DispatchError>(Error::<T>::InvalidKittyId.into())?;
+
+			// 判断kitty owner
+			ensure!(Self::kitty_owner(kitty_id) == Some(who.clone()), Error::<T>::NotOwner);
+
+			// 判断是否出售中
+			ensure!(Self::kitty_on_sale(kitty_id).is_some(), Error::<T>::AlreadyOnSale);
+
+			// 添加出售标记, 开始销售
+			<KittyOnSale<T>>::insert(kitty_id, ());
+			Self::deposit_event(Event::KittyOnSale { who, kitty_id });
+
+			Ok(())
+		}
+
+		#[pallet::call_index(4)]
+		#[pallet::weight(10_000)]
+		pub fn buy(origin: OriginFor<T>, kitty_id: KittyId) -> DispatchResult {
+			let who = ensure_signed(origin)?;
+
+			// kitty 是否存在
+			Self::kitties(kitty_id).ok_or::<DispatchError>(Error::<T>::InvalidKittyId.into())?;
+
+			// 查看owner是否存在, 是否是自己
+			let owner =
+				Self::kitty_owner(kitty_id).ok_or::<DispatchError>(Error::<T>::NoOwner.into())?;
+			ensure!(owner != who, Error::<T>::AlreadyOwned);
+
+			// kitty 是否销售中
+			ensure!(Self::kitty_on_sale(kitty_id).is_some(), Error::<T>::NotOnSale);
+
+			// 退换质押给owner 质押新的token并更改所属权 及sale状态
+			let price = T::KittyPrice::get();
+			T::Currency::reserve(&who, price)?;
+			T::Currency::unreserve(&owner, price);
+
+			<KittyOwner<T>>::insert(kitty_id, &who);
+			<KittyOnSale<T>>::remove(kitty_id);
+
+			Self::deposit_event(Event::KittyBought { who, kitty_id });
+
 			Ok(())
 		}
 	}
