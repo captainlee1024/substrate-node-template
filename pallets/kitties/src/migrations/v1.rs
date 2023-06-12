@@ -36,7 +36,7 @@ pub fn migrate<T: Config>() -> Weight {
 	for (kitty_id, kitty) in
 		storage_key_iter::<KittyId, OldKitty, Blake2_128Concat>(module, item).drain()
 	{
-		let new_kitty = Kitty { dna: kitty.0, name: *b"abcd" };
+		let new_kitty = Kitty { dna: kitty.0, name: *b"abcdefgh" };
 
 		Kitties::<T>::insert(kitty_id, &new_kitty);
 	}

@@ -17,7 +17,8 @@ mod create_kitty {
 			new_test_ext().execute_with(|| {
 				let kitty_id = 0;
 				let account_id = 1;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
 					account_id,
@@ -51,7 +52,8 @@ mod create_kitty {
 		#[test]
 		fn bad_origin() {
 			new_test_ext().execute_with(|| {
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_noop!(KittiesModule::creat(RuntimeOrigin::root(), kitty_name), BadOrigin);
 			})
@@ -60,7 +62,8 @@ mod create_kitty {
 		#[test]
 		fn next_kitty_id_overflow() {
 			new_test_ext().execute_with(|| {
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				crate::NextKittyId::<Test>::set(crate::KittyId::MAX);
 				assert_noop!(
@@ -83,7 +86,8 @@ mod breed_kitty {
 			new_test_ext().execute_with(|| {
 				let kitty_id = 0;
 				let account_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -146,7 +150,8 @@ mod breed_kitty {
 		#[test]
 		fn bad_origin() {
 			new_test_ext().execute_with(|| {
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_noop!(
 					KittiesModule::breed(RuntimeOrigin::root(), 0, 1, kitty_name),
@@ -158,7 +163,8 @@ mod breed_kitty {
 		#[test]
 		fn parents_are_same_kitty() {
 			new_test_ext().execute_with(|| {
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_noop!(
 					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 0, kitty_name),
@@ -170,7 +176,8 @@ mod breed_kitty {
 		#[test]
 		fn parent_not_found() {
 			new_test_ext().execute_with(|| {
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_noop!(
 					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 1, kitty_name),
@@ -183,7 +190,8 @@ mod breed_kitty {
 		fn next_kitty_id_overflow() {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -217,7 +225,8 @@ mod transfer_kitty {
 				let kitty_id = 0;
 				let account_id = 1;
 				let recipient = 2;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -282,7 +291,8 @@ mod transfer_kitty {
 		fn not_owner() {
 			new_test_ext().execute_with(|| {
 				let account_id = 2;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -311,7 +321,8 @@ mod sale_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
@@ -349,7 +360,8 @@ mod sale_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
@@ -373,7 +385,8 @@ mod sale_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
@@ -406,7 +419,8 @@ mod buy_kitty {
 				let account_id = 0;
 				let account_id2 = 1;
 				let kitty_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
@@ -453,7 +467,8 @@ mod buy_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
@@ -483,7 +498,8 @@ mod buy_kitty {
 				let account_id = 0;
 				let account_id2 = 1;
 				let kitty_id = 0;
-				let kitty_name = *b"abcd";
+				// let kitty_name = *b"abcd"
+				let kitty_name = *b"abcdefgh";
 
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(

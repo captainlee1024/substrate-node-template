@@ -1,6 +1,15 @@
 # 第三次作业截图请看这里
 > 代码在kitties里
 
+## v0 升级到 v2的截图
+升级之前的数据查询截图
+![](./v0_to_v2_v0.jpg)
+![](./v0_to_v2_v2.jpg)
+
+## v1 升级到 v2的截图
+![](./v1_to_v2_v1.jpg)
+![](./v1_to_v2_v2.jpg)
+
 ## 给sale, buy添加单元测试的运行截图
 ![](./test_for_sale_and_buy.jpg)
 
