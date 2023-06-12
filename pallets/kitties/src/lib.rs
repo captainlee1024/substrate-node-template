@@ -11,6 +11,8 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
+mod migrations;
+
 #[frame_support::pallet]
 pub mod pallet {
 	use frame_support::pallet_prelude::*;
@@ -19,12 +21,14 @@ pub mod pallet {
 	// ReservableCurrency 提供质押功能
 	use frame_support::{
 		traits::{Currency, ExistenceRequirement, Randomness},
+		weights::Weight,
 		// traits::{Currency, Randomness, ReservableCurrency},
 		PalletId,
 	};
 
 	use sp_runtime::traits::AccountIdConversion;
 
+	use crate::migrations;
 	use sp_io::hashing::blake2_128;
 
 	// 我们需要根据一个Id来快速找到一个kitty, 需要定义一个类型 kitty-id
@@ -38,9 +42,19 @@ pub mod pallet {
 	#[derive(
 		Encode, Decode, Clone, Copy, RuntimeDebug, PartialEq, Eq, Default, TypeInfo, MaxEncodedLen,
 	)]
-	pub struct Kitty(pub [u8; 16]);
+	pub struct Kitty {
+		// 原来的数据
+		pub dna: [u8; 16],
+		// 新增名字
+		pub name: [u8; 4],
+	}
+	// pub struct Kitty(pub [u8; 16]);
+	// 模拟链升级, 业务变更, 我们需要新的结构来表示Kitty
+
+	const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
 	#[pallet::pallet]
+	#[pallet::storage_version(STORAGE_VERSION)]
 	pub struct Pallet<T>(_);
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
@@ -127,6 +141,13 @@ pub mod pallet {
 		AlreadyOwned,
 	}
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn on_runtime_upgrade() -> Weight {
+			migrations::v1::migrate::<T>()
+		}
+	}
+
 	// Dispatchable functions allows users to interact with the pallet and invoke state changes.
 	// These functions materialize as "extrinsics", which are often compared to transactions.
 	// Dispatchable functions must be annotated with a weight and must return a DispatchResult.
@@ -136,12 +157,13 @@ pub mod pallet {
 		/// storage and emits an event. This function must be dispatched by a signed extrinsic.
 		#[pallet::call_index(0)]
 		#[pallet::weight(10_000)]
-		pub fn creat(origin: OriginFor<T>) -> DispatchResult {
+		pub fn creat(origin: OriginFor<T>, name: [u8; 4]) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 
 			let kitty_id = Self::get_next_id()?;
 			//			let kitty = Kitty(Default::default());
-			let kitty = Kitty(Self::random_value(&who));
+			// let kitty = Kitty(Self::random_value(&who));
+			let kitty = Kitty { dna: Self::random_value(&who), name };
 
 			// 根据价格 质押token
 			let price = T::KittyPrice::get();
@@ -170,6 +192,7 @@ pub mod pallet {
 			origin: OriginFor<T>,
 			kitty_id_1: KittyId,
 			kitty_id_2: KittyId,
+			name: [u8; 4],
 		) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			ensure!(kitty_id_1 != kitty_id_2, Error::<T>::SameKittyId);
@@ -178,6 +201,8 @@ pub mod pallet {
 			ensure!(Kitties::<T>::contains_key(kitty_id_2), Error::<T>::InvalidKittyId);
 
 			let kitty_id = Self::get_next_id()?;
+
+			/*
 			let kitty_1 = Self::kitties(kitty_id_1).ok_or(Error::<T>::InvalidKittyId)?;
 			let kitty_2 = Self::kitties(kitty_id_2).ok_or(Error::<T>::InvalidKittyId)?;
 
@@ -189,6 +214,10 @@ pub mod pallet {
 				data[i] = (kitty_1.0[i] & selector[i]) | (kitty_2.0[i] & !selector[i]);
 			}
 			let kitty = Kitty(data);
+			 */
+
+			let dna = [0u8; 16];
+			let kitty = Kitty { dna, name };
 
 			// 根据价格 质押token
 			let price = T::KittyPrice::get();

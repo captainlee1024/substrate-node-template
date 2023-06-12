@@ -17,6 +17,7 @@ mod create_kitty {
 			new_test_ext().execute_with(|| {
 				let kitty_id = 0;
 				let account_id = 1;
+				let kitty_name = *b"abcd";
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
 					account_id,
@@ -25,7 +26,7 @@ mod create_kitty {
 				));
 
 				assert_eq!(KittiesModule::next_kitty_id(), kitty_id);
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
 
 				assert_eq!(KittiesModule::next_kitty_id(), kitty_id + 1);
 				assert_eq!(KittiesModule::kitties(kitty_id).is_some(), true);
@@ -34,7 +35,7 @@ mod create_kitty {
 
 				crate::NextKittyId::<Test>::set(crate::KittyId::MAX);
 				assert_noop!(
-					KittiesModule::creat(RuntimeOrigin::signed(account_id)),
+					KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name),
 					Error::<Test>::KittyIdOverflow
 				);
 
@@ -50,16 +51,20 @@ mod create_kitty {
 		#[test]
 		fn bad_origin() {
 			new_test_ext().execute_with(|| {
-				assert_noop!(KittiesModule::creat(RuntimeOrigin::root()), BadOrigin);
+				let kitty_name = *b"abcd";
+
+				assert_noop!(KittiesModule::creat(RuntimeOrigin::root(), kitty_name), BadOrigin);
 			})
 		}
 
 		#[test]
 		fn next_kitty_id_overflow() {
 			new_test_ext().execute_with(|| {
+				let kitty_name = *b"abcd";
+
 				crate::NextKittyId::<Test>::set(crate::KittyId::MAX);
 				assert_noop!(
-					KittiesModule::creat(RuntimeOrigin::signed(0)),
+					KittiesModule::creat(RuntimeOrigin::signed(0), kitty_name),
 					Error::<Test>::KittyIdOverflow,
 				);
 			})
@@ -78,6 +83,7 @@ mod breed_kitty {
 			new_test_ext().execute_with(|| {
 				let kitty_id = 0;
 				let account_id = 0;
+				let kitty_name = *b"abcd";
 
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -86,24 +92,35 @@ mod breed_kitty {
 					1000000
 				));
 				assert_noop!(
-					KittiesModule::breed(RuntimeOrigin::signed(account_id), kitty_id, kitty_id),
+					KittiesModule::breed(
+						RuntimeOrigin::signed(account_id),
+						kitty_id,
+						kitty_id,
+						kitty_name
+					),
 					Error::<Test>::SameKittyId
 				);
 
 				assert_noop!(
-					KittiesModule::breed(RuntimeOrigin::signed(account_id), kitty_id, kitty_id + 1),
+					KittiesModule::breed(
+						RuntimeOrigin::signed(account_id),
+						kitty_id,
+						kitty_id + 1,
+						kitty_name
+					),
 					Error::<Test>::InvalidKittyId
 				);
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
 
 				assert_eq!(KittiesModule::next_kitty_id(), kitty_id + 2);
 
 				assert_ok!(KittiesModule::breed(
 					RuntimeOrigin::signed(account_id),
 					kitty_id,
-					kitty_id + 1
+					kitty_id + 1,
+					kitty_name
 				));
 
 				let breed_kitty_id = 2;
@@ -129,15 +146,22 @@ mod breed_kitty {
 		#[test]
 		fn bad_origin() {
 			new_test_ext().execute_with(|| {
-				assert_noop!(KittiesModule::breed(RuntimeOrigin::root(), 0, 1), BadOrigin);
+				let kitty_name = *b"abcd";
+
+				assert_noop!(
+					KittiesModule::breed(RuntimeOrigin::root(), 0, 1, kitty_name),
+					BadOrigin
+				);
 			})
 		}
 
 		#[test]
 		fn parents_are_same_kitty() {
 			new_test_ext().execute_with(|| {
+				let kitty_name = *b"abcd";
+
 				assert_noop!(
-					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 0),
+					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 0, kitty_name),
 					Error::<Test>::SameKittyId
 				);
 			})
@@ -146,8 +170,10 @@ mod breed_kitty {
 		#[test]
 		fn parent_not_found() {
 			new_test_ext().execute_with(|| {
+				let kitty_name = *b"abcd";
+
 				assert_noop!(
-					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 1),
+					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 1, kitty_name),
 					Error::<Test>::InvalidKittyId
 				);
 			})
@@ -157,6 +183,8 @@ mod breed_kitty {
 		fn next_kitty_id_overflow() {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
+				let kitty_name = *b"abcd";
+
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
 					account_id,
@@ -164,12 +192,12 @@ mod breed_kitty {
 					1000000
 				));
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
 				crate::NextKittyId::<Test>::set(crate::KittyId::MAX);
 
 				assert_noop!(
-					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 1),
+					KittiesModule::breed(RuntimeOrigin::signed(0), 0, 1, kitty_name),
 					Error::<Test>::KittyIdOverflow,
 				);
 			})
@@ -189,6 +217,8 @@ mod transfer_kitty {
 				let kitty_id = 0;
 				let account_id = 1;
 				let recipient = 2;
+				let kitty_name = *b"abcd";
+
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
 					account_id,
@@ -197,7 +227,7 @@ mod transfer_kitty {
 				));
 				assert_ok!(Balances::set_balance(RuntimeOrigin::root().into(), recipient, 100, 0));
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
 				assert_eq!(KittiesModule::kitty_owner(kitty_id), Some(account_id));
 
 				assert_noop!(
@@ -252,13 +282,15 @@ mod transfer_kitty {
 		fn not_owner() {
 			new_test_ext().execute_with(|| {
 				let account_id = 2;
+				let kitty_name = *b"abcd";
+
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
 					account_id,
 					1000000,
 					1000000
 				));
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(2)));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(2), kitty_name));
 				assert_noop!(
 					KittiesModule::transfer(RuntimeOrigin::signed(0), 1, 0),
 					Error::<Test>::NotOwner
@@ -279,6 +311,8 @@ mod sale_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
+				let kitty_name = *b"abcd";
+
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -287,7 +321,10 @@ mod sale_kitty {
 					1000000
 				));
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+				assert_ok!(KittiesModule::creat(
+					RuntimeOrigin::signed(account_id).into(),
+					kitty_name
+				));
 				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
 				System::assert_last_event(KittyOnSale { who: account_id, kitty_id }.into());
 			})
@@ -312,6 +349,8 @@ mod sale_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
+				let kitty_name = *b"abcd";
+
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -320,7 +359,7 @@ mod sale_kitty {
 					1000000
 				));
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
 
 				assert_noop!(
 					KittiesModule::sale(RuntimeOrigin::signed(1), kitty_id),
@@ -334,6 +373,8 @@ mod sale_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
+				let kitty_name = *b"abcd";
+
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -341,7 +382,7 @@ mod sale_kitty {
 					1000000,
 					1000000
 				));
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id), kitty_name));
 
 				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
 				assert_noop!(
@@ -365,6 +406,8 @@ mod buy_kitty {
 				let account_id = 0;
 				let account_id2 = 1;
 				let kitty_id = 0;
+				let kitty_name = *b"abcd";
+
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -379,7 +422,10 @@ mod buy_kitty {
 					1000000
 				));
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+				assert_ok!(KittiesModule::creat(
+					RuntimeOrigin::signed(account_id).into(),
+					kitty_name
+				));
 				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
 				System::assert_last_event(KittyOnSale { who: account_id, kitty_id }.into());
 
@@ -407,6 +453,8 @@ mod buy_kitty {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
 				let kitty_id = 0;
+				let kitty_name = *b"abcd";
+
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -415,7 +463,10 @@ mod buy_kitty {
 					1000000
 				));
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+				assert_ok!(KittiesModule::creat(
+					RuntimeOrigin::signed(account_id).into(),
+					kitty_name
+				));
 				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
 				System::assert_last_event(KittyOnSale { who: account_id, kitty_id }.into());
 
@@ -432,6 +483,8 @@ mod buy_kitty {
 				let account_id = 0;
 				let account_id2 = 1;
 				let kitty_id = 0;
+				let kitty_name = *b"abcd";
+
 				// 设置一些账户余额用于转账
 				assert_ok!(Balances::set_balance(
 					RuntimeOrigin::root().into(),
@@ -446,7 +499,10 @@ mod buy_kitty {
 					1000000
 				));
 
-				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+				assert_ok!(KittiesModule::creat(
+					RuntimeOrigin::signed(account_id).into(),
+					kitty_name
+				));
 
 				assert_noop!(
 					KittiesModule::buy(RuntimeOrigin::signed(account_id2).into(), kitty_id),
