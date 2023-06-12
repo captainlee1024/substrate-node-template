@@ -24,6 +24,7 @@ use sp_version::NativeVersion;
 use sp_version::RuntimeVersion;
 
 // A few exports that help ease life for downstream crates.
+use frame_support::PalletId;
 pub use frame_support::{
 	construct_runtime, parameter_types,
 	traits::{
@@ -283,6 +284,14 @@ pub use pallet_kitties;
 impl pallet_kitties::Config for Runtime {
 	type RuntimeEvent = RuntimeEvent;
 	type Randomness = RandomnessCollectiveFlip;
+	type Currency = Balances;
+	type KittyPrice = KittyPrice;
+	type PalletId = KittyPalletId;
+}
+
+parameter_types! {
+	pub KittyPalletId: PalletId = PalletId(*b"py/kitty");
+	pub KittyPrice: Balance = EXISTENTIAL_DEPOSIT * 10;
 }
 
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
@@ -330,7 +339,7 @@ pub type SignedExtra = (
 
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
-generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+	generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 /// The payload being signed in transactions.
 pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// Executive: handles dispatch to the various modules.

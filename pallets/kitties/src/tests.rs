@@ -1,7 +1,7 @@
 use crate::{
 	mock::*,
 	Error,
-	Event::{KittyBreed, KittyCreated, KittyTransferred},
+	Event::{KittyBought, KittyBreed, KittyCreated, KittyOnSale, KittyTransferred},
 };
 use frame_support::{assert_noop, assert_ok};
 use sp_runtime::traits::BadOrigin;
@@ -17,6 +17,13 @@ mod create_kitty {
 			new_test_ext().execute_with(|| {
 				let kitty_id = 0;
 				let account_id = 1;
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+
 				assert_eq!(KittiesModule::next_kitty_id(), kitty_id);
 				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
 
@@ -32,7 +39,6 @@ mod create_kitty {
 				);
 
 				let kitty = KittiesModule::kitties(kitty_id).expect("kitty was created");
-				// homework
 				System::assert_last_event(KittyCreated { who: account_id, kitty_id, kitty }.into());
 			})
 		}
@@ -73,6 +79,12 @@ mod breed_kitty {
 				let kitty_id = 0;
 				let account_id = 0;
 
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
 				assert_noop!(
 					KittiesModule::breed(RuntimeOrigin::signed(account_id), kitty_id, kitty_id),
 					Error::<Test>::SameKittyId
@@ -104,7 +116,6 @@ mod breed_kitty {
 				);
 
 				let kitty = KittiesModule::kitties(kitty_id + 2).expect("child kitty was created");
-				// homework
 				System::assert_last_event(
 					KittyBreed { who: account_id, kitty_id: kitty_id + 2, kitty }.into(),
 				);
@@ -146,6 +157,13 @@ mod breed_kitty {
 		fn next_kitty_id_overflow() {
 			new_test_ext().execute_with(|| {
 				let account_id = 0;
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+
 				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
 				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
 				crate::NextKittyId::<Test>::set(crate::KittyId::MAX);
@@ -171,6 +189,14 @@ mod transfer_kitty {
 				let kitty_id = 0;
 				let account_id = 1;
 				let recipient = 2;
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+				assert_ok!(Balances::set_balance(RuntimeOrigin::root().into(), recipient, 100, 0));
+
 				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
 				assert_eq!(KittiesModule::kitty_owner(kitty_id), Some(account_id));
 
@@ -195,7 +221,6 @@ mod transfer_kitty {
 
 				assert_eq!(KittiesModule::kitty_owner(kitty_id), Some(account_id));
 
-				// homework
 				System::assert_last_event(
 					KittyTransferred { who: recipient, recipient: account_id, kitty_id }.into(),
 				);
@@ -226,12 +251,208 @@ mod transfer_kitty {
 		#[test]
 		fn not_owner() {
 			new_test_ext().execute_with(|| {
+				let account_id = 2;
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
 				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(2)));
 				assert_noop!(
 					KittiesModule::transfer(RuntimeOrigin::signed(0), 1, 0),
 					Error::<Test>::NotOwner
 				);
 			})
+		}
+	}
+}
+
+mod sale_kitty {
+	use super::*;
+
+	mod success {
+		use super::*;
+
+		#[test]
+		fn sale_should_work() {
+			new_test_ext().execute_with(|| {
+				let account_id = 0;
+				let kitty_id = 0;
+				// 设置一些账户余额用于转账
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
+				System::assert_last_event(KittyOnSale { who: account_id, kitty_id }.into());
+			})
+		}
+	}
+
+	mod failed_when {
+		use super::*;
+
+		#[test]
+		fn kitty_not_found() {
+			new_test_ext().execute_with(|| {
+				assert_noop!(
+					KittiesModule::sale(RuntimeOrigin::signed(0).into(), 0),
+					Error::<Test>::InvalidKittyId
+				);
+			});
+		}
+
+		#[test]
+		fn not_owner() {
+			new_test_ext().execute_with(|| {
+				let account_id = 0;
+				let kitty_id = 0;
+				// 设置一些账户余额用于转账
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+
+				assert_noop!(
+					KittiesModule::sale(RuntimeOrigin::signed(1), kitty_id),
+					Error::<Test>::NotOwner,
+				);
+			});
+		}
+
+		#[test]
+		fn already_on_sale() {
+			new_test_ext().execute_with(|| {
+				let account_id = 0;
+				let kitty_id = 0;
+				// 设置一些账户余额用于转账
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id)));
+
+				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
+				assert_noop!(
+					KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id),
+					Error::<Test>::AlreadyOnSale,
+				);
+			});
+		}
+	}
+}
+
+mod buy_kitty {
+	use super::*;
+
+	mod success {
+		use super::*;
+
+		#[test]
+		fn buy_should_work() {
+			new_test_ext().execute_with(|| {
+				let account_id = 0;
+				let account_id2 = 1;
+				let kitty_id = 0;
+				// 设置一些账户余额用于转账
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id2,
+					1000000,
+					1000000
+				));
+
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
+				System::assert_last_event(KittyOnSale { who: account_id, kitty_id }.into());
+
+				assert_ok!(KittiesModule::buy(RuntimeOrigin::signed(account_id2).into(), kitty_id));
+				System::assert_last_event(KittyBought { who: account_id2, kitty_id }.into());
+			})
+		}
+	}
+
+	mod failed_when {
+		use super::*;
+
+		#[test]
+		fn kitty_not_found() {
+			new_test_ext().execute_with(|| {
+				assert_noop!(
+					KittiesModule::buy(RuntimeOrigin::signed(0), 0),
+					Error::<Test>::InvalidKittyId,
+				);
+			});
+		}
+
+		#[test]
+		fn already_owned() {
+			new_test_ext().execute_with(|| {
+				let account_id = 0;
+				let kitty_id = 0;
+				// 设置一些账户余额用于转账
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+				assert_ok!(KittiesModule::sale(RuntimeOrigin::signed(account_id), kitty_id));
+				System::assert_last_event(KittyOnSale { who: account_id, kitty_id }.into());
+
+				assert_noop!(
+					KittiesModule::buy(RuntimeOrigin::signed(account_id).into(), kitty_id),
+					Error::<Test>::AlreadyOwned,
+				);
+			})
+		}
+
+		#[test]
+		fn not_on_sale() {
+			new_test_ext().execute_with(|| {
+				let account_id = 0;
+				let account_id2 = 1;
+				let kitty_id = 0;
+				// 设置一些账户余额用于转账
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id,
+					1000000,
+					1000000
+				));
+				assert_ok!(Balances::set_balance(
+					RuntimeOrigin::root().into(),
+					account_id2,
+					1000000,
+					1000000
+				));
+
+				assert_ok!(KittiesModule::creat(RuntimeOrigin::signed(account_id).into()));
+
+				assert_noop!(
+					KittiesModule::buy(RuntimeOrigin::signed(account_id2).into(), kitty_id),
+					Error::<Test>::NotOnSale,
+				);
+			});
 		}
 	}
 }

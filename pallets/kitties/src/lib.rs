@@ -17,7 +17,14 @@ pub mod pallet {
 	use frame_system::pallet_prelude::*;
 
 	// ReservableCurrency 提供质押功能
-	use frame_support::traits::{Currency, Randomness, ReservableCurrency};
+	use frame_support::{
+		traits::{Currency, ExistenceRequirement, Randomness},
+		// traits::{Currency, Randomness, ReservableCurrency},
+		PalletId,
+	};
+
+	use sp_runtime::traits::AccountIdConversion;
+
 	use sp_io::hashing::blake2_128;
 
 	// 我们需要根据一个Id来快速找到一个kitty, 需要定义一个类型 kitty-id
@@ -42,10 +49,13 @@ pub mod pallet {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 		type Randomness: Randomness<Self::Hash, Self::BlockNumber>;
-		type Currency: ReservableCurrency<Self::AccountId>;
+		type Currency: Currency<Self::AccountId>;
 		// Balance 并没有在system里确定类型, 需要在使用的地方定义类型
 		#[pallet::constant]
 		type KittyPrice: Get<BalanceOf<Self>>;
+		// 使用Currency代替ReservableCurrency实现售卖功能, 我们需要先把钱转到某个账户
+		// 这里可以定义一个pallet id会转换成pallet账户, 类似合约账户
+		type PalletId: Get<PalletId>;
 	}
 
 	// The pallet's runtime storage items.
@@ -135,7 +145,15 @@ pub mod pallet {
 
 			// 根据价格 质押token
 			let price = T::KittyPrice::get();
-			T::Currency::reserve(&who, price)?;
+			// T::Currency::reserve(&who, price)?;
+			// 从质押变成转账
+			T::Currency::transfer(
+				&who,
+				&Self::get_account_id(),
+				price,
+				// 保证账户是存活的, 要有最小余额在里面
+				ExistenceRequirement::KeepAlive,
+			)?;
 
 			Kitties::<T>::insert(kitty_id, &kitty);
 			KittyOwner::<T>::insert(kitty_id, &who);
@@ -174,7 +192,15 @@ pub mod pallet {
 
 			// 根据价格 质押token
 			let price = T::KittyPrice::get();
-			T::Currency::reserve(&who, price)?;
+			// T::Currency::reserve(&who, price)?;
+			// 从质押变成转账
+			T::Currency::transfer(
+				&who,
+				&Self::get_account_id(),
+				price,
+				// 保证账户是存活的, 要有最小余额在里面
+				ExistenceRequirement::KeepAlive,
+			)?;
 
 			Kitties::<T>::insert(kitty_id, &kitty);
 			KittyOwner::<T>::insert(kitty_id, &who);
@@ -212,7 +238,8 @@ pub mod pallet {
 			ensure!(Self::kitty_owner(kitty_id) == Some(who.clone()), Error::<T>::NotOwner);
 
 			// 判断是否出售中
-			ensure!(Self::kitty_on_sale(kitty_id).is_some(), Error::<T>::AlreadyOnSale);
+			ensure!(!Self::kitty_on_sale(kitty_id).is_some(), Error::<T>::AlreadyOnSale);
+			// ensure!(!KittyOnSale::<T>::contains_key(kitty_id), Error::<T>::AlreadyOnSale);
 
 			// 添加出售标记, 开始销售
 			<KittyOnSale<T>>::insert(kitty_id, ());
@@ -239,8 +266,9 @@ pub mod pallet {
 
 			// 退换质押给owner 质押新的token并更改所属权 及sale状态
 			let price = T::KittyPrice::get();
-			T::Currency::reserve(&who, price)?;
-			T::Currency::unreserve(&owner, price);
+			// T::Currency::reserve(&who, price)?;
+			// T::Currency::unreserve(&owner, price);
+			T::Currency::transfer(&who, &owner, price, ExistenceRequirement::KeepAlive)?;
 
 			<KittyOwner<T>>::insert(kitty_id, &who);
 			<KittyOnSale<T>>::remove(kitty_id);
@@ -270,6 +298,10 @@ pub mod pallet {
 				<frame_system::Pallet<T>>::extrinsic_index(),
 			);
 			payload.using_encoded(blake2_128)
+		}
+
+		fn get_account_id() -> T::AccountId {
+			T::PalletId::get().into_account_truncating()
 		}
 	}
 }

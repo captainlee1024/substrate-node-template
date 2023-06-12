@@ -1,3 +1,9 @@
+# 第三次作业截图请看这里
+> 代码在kitties里
+
+## 给sale, buy添加单元测试的运行截图
+![](./test_for_sale_and_buy.jpg)
+
 # 老师,第二次作业截图请看这里!
 
 > 代码在src里!
