@@ -106,5 +106,26 @@ pub mod pallet {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			log::info!("OCW ==> Hello World from offchain workers!: {:?}", block_number);
 		}
+
+		// 块初始化时候执行
+		// 在 Starting consensus session on top of parent pre_hash 之后开始执行
+		fn on_initialize(_n: T::BlockNumber) -> Weight {
+			log::info!("OCW ==> in on_initialize!");
+			Weight::from_parts(0, 0)
+		}
+
+		// 块确定之后执行
+		// 在on_idle之后Prepared block for proposing at block_number之前执行该函数
+		fn on_finalize(_n: T::BlockNumber) {
+			log::info!("OCW ==> in on_finalize!");
+		}
+
+		// 当块runtime中extrinsic执行完毕, 还有剩余时间时执行
+		// 在 Starting consensus session on top of parent pre_hash 之后开始执行 on_initialize
+		// 之后开始执行块里的交易, 执行完交易之后还有时间的话就会执行on_idle了
+		fn on_idle(_n: T::BlockNumber, _remaining_weight: Weight) -> Weight {
+			log::info!("OCW ==> in on_idle!");
+			Weight::from_parts(0, 0)
+		}
 	}
 }
