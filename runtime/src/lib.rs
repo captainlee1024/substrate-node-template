@@ -296,6 +296,11 @@ parameter_types! {
 
 impl pallet_insecure_randomness_collective_flip::Config for Runtime {}
 
+pub use pallet_ocw;
+impl pallet_ocw::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime
@@ -316,6 +321,7 @@ construct_runtime!(
 		TemplateModule: pallet_template,
 		PoeModule: pallet_poe,
 		KittiesModule: pallet_kitties,
+		OcwModule: pallet_ocw,
 	}
 );
 
