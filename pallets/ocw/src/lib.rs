@@ -14,8 +14,15 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
-use frame_system::offchain::{AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer};
+use codec::{Decode, Encode};
+use frame_system::offchain::{
+	AppCrypto, CreateSignedTransaction, SendSignedTransaction, SignedPayload, Signer, SigningTypes,
+};
 use sp_core::crypto::KeyTypeId;
+use sp_runtime::{
+	transaction_validity::{InvalidTransaction, TransactionValidity, ValidTransaction},
+	RuntimeDebug,
+};
 
 pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ocwd");
 pub mod crypto {
@@ -61,6 +68,19 @@ pub mod pallet {
 	};
 	use sp_std::vec;
 
+	#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, scale_info::TypeInfo)]
+	pub struct Payload<Public> {
+		number: u64,
+		/// signer的公钥
+		public: Public,
+	}
+
+	impl<T: SigningTypes> SignedPayload<T> for Payload<T::Public> {
+		fn public(&self) -> T::Public {
+			self.public.clone()
+		}
+	}
+
 	// 处理获取到的Github上的数据
 	#[derive(Deserialize, Encode, Decode)]
 	struct GithubInfo {
@@ -81,6 +101,8 @@ pub mod pallet {
 
 	// 实现 fmt::Debug 将字节数组转成string更好看一些
 	use core::{convert::TryInto, fmt};
+	use frame_system::offchain::SendUnsignedTransaction;
+
 	impl fmt::Debug for GithubInfo {
 		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 			write!(
@@ -183,6 +205,57 @@ pub mod pallet {
 			log::info!("OCW ==> in submit_data call: {:?}", payload);
 			Ok(().into())
 		}
+
+		#[pallet::call_index(3)]
+		#[pallet::weight(0)]
+		pub fn unsigned_extrinsic_with_signed_payload(
+			origin: OriginFor<T>,
+			payload: Payload<T::Public>,
+			_signature: T::Signature,
+		) -> DispatchResult {
+			ensure_none(origin)?;
+
+			log::info!(
+				"OCW ==> in call unsigned_extrinsic_with_signed_payload: {:?}",
+				payload.number
+			);
+			// Return a successful DispatchResultWithPostInfo
+			Ok(())
+		}
+	}
+
+	#[pallet::validate_unsigned]
+	impl<T: Config> ValidateUnsigned for Pallet<T> {
+		type Call = Call<T>;
+
+		/// Validate unsigned call to this module.
+		///
+		/// By default unsigned transaction are disallowed, but implementing the valdator
+		/// here we make sure that some particular calls (the onese produced buy offchain worker)
+		/// are being whitelisted and marked as valid.
+		fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+			const UNSIGNED_TXS_PRIORITY: u64 = 100;
+			let valid_tx = |provide| {
+				ValidTransaction::with_tag_prefix("my-pallet") // 前缀
+					.priority(UNSIGNED_TXS_PRIORITY) // 在交易池中的拍序权重
+					.and_provides([&provide])
+					.longevity(3) // 交易在交易池中的存活时间
+					.propagate(true) // 是否通过网络广播
+					.build()
+			};
+
+			match call {
+				Call::unsigned_extrinsic_with_signed_payload { ref payload, ref signature } => {
+					// 验签
+					if !SignedPayload::<T>::verify::<T::AuthorityId>(payload, signature.clone()) {
+						return InvalidTransaction::BadProof.into()
+					}
+
+					valid_tx(b"unsigned_extrinsic_with_signed_payload".to_vec())
+				},
+				_ => InvalidTransaction::Call.into(),
+			}
+		}
 	}
 
 	/// Local Storage 作用：
@@ -198,8 +271,34 @@ pub mod pallet {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			log::info!("OCW ==> Hello World from offchain workers!: {:?}", block_number);
 
-			let payload: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8];
-			_ = Self::send_signed_tx(payload);
+			// let payload: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8];
+			// _ = Self::send_signed_tx(payload);
+
+			// 我们的数据
+			let number: u64 = 42;
+			// 获取一个当前pallet的账户
+			// 在service里我们就设置了一个账户给当前pallet   账户是Alice
+			let signer = Signer::<T, T::AuthorityId>::any_account();
+
+			if let Some((_, res)) = signer.send_unsigned_transaction(
+				// this line is to prepare and return payload
+				|acct| Payload { number, public: acct.public.clone() },
+				|payload, signature| Call::unsigned_extrinsic_with_signed_payload {
+					payload,
+					signature,
+				},
+			) {
+				match res {
+					Ok(()) => {
+						log::info!("OCW ==> unsigned tx with signed payload successfully sent.");
+					},
+					Err(()) => {
+						log::error!("OCW ==> sending unsigned tx with signed payload failed.");
+					},
+				};
+			} else {
+				log::error!("OCW ==> No local account available");
+			}
 
 			log::info!("OCW ==> Leave from offchain workers!: {:?}", block_number);
 		}
