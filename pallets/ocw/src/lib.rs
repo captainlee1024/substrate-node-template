@@ -18,7 +18,10 @@ mod benchmarking;
 pub mod pallet {
 	use frame_support::{inherent::Vec, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
-	use sp_runtime::{offchain::storage::StorageValueRef, traits::Zero};
+	use sp_runtime::{
+		offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+		traits::Zero,
+	};
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -139,8 +142,23 @@ pub mod pallet {
 				let value = (random_slice, timestamp_u64);
 				log::info!("OCW ==> in odd block, value to write: {:?}", value);
 
+				struct StateError;
 				// write or mutate tuple content to key
-				val_ref.set(&value);
+				// val_ref.set(&value);
+				let res = val_ref.mutate(|val: Result<Option<([u8;32], u64)>, StorageRetrievalError>| -> Result<_, StateError> {
+					match val {
+						Ok(Some(_)) => Ok(value),
+						_ => Ok(value),
+					}
+				});
+
+				match res {
+					Ok(value) => {
+						log::info!("OCW ==> in odd block, mutate successfully: {:?}", value);
+					},
+					Err(MutateStorageError::ValueFunctionFailed(_)) => (),
+					Err(MutateStorageError::ConcurrentModification(_)) => (),
+				}
 			} else {
 				// even
 				let key = Self::derive_key(block_number - 1u32.into());
