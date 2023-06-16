@@ -100,6 +100,18 @@ pub fn new_partial(
 		.expect("Creating key with account Alice should succeed.");
 	}
 
+	// 将dev模式下预置账户Alice添加给pallet_ocw用于offchain worker发送签名交易时签名
+	// Alice账户要有足够的余额, 执行该交易需要扣费
+	if config.offchain_worker.enabled {
+		let keystore = keystore_container.sync_keystore();
+		sp_keystore::SyncCryptoStore::sr25519_generate_new(
+			&*keystore,
+			node_template_runtime::pallet_ocwhomework::KEY_TYPE,
+			Some("//Alice"),
+		)
+		.expect("Creating key with account Alice should succeed.");
+	}
+
 	let telemetry = telemetry.map(|(worker, telemetry)| {
 		task_manager.spawn_handle().spawn("telemetry", None, worker.run());
 		telemetry

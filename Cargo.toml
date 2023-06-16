@@ -5,6 +5,7 @@ members = [
     "pallets/poe",
     "pallets/kitties",
     "pallets/ocw",
+    "pallets/ocwhomework",
     "runtime",
 ]
 [profile.release]

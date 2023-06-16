@@ -39,7 +39,7 @@ pub use frame_support::{
 	StorageValue,
 };
 use frame_support::{log, PalletId};
-use frame_system::offchain::{AppCrypto, SendTransactionTypes};
+use frame_system::offchain::{AppCrypto, CreateSignedTransaction, SendTransactionTypes};
 pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
@@ -361,6 +361,13 @@ impl frame_system::offchain::SigningTypes for Runtime {
 	type Signature = Signature;
 }
 
+pub use pallet_ocwhomework;
+
+impl pallet_ocwhomework::Config for Runtime {
+	type RuntimeEvent = RuntimeEvent;
+	type AuthorityId = pallet_ocwhomework::crypto::OcwAuthId;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
 	pub struct Runtime
@@ -382,6 +389,7 @@ construct_runtime!(
 		PoeModule: pallet_poe,
 		KittiesModule: pallet_kitties,
 		OcwModule: pallet_ocw,
+		OcwHomeWorkModule: pallet_ocwhomework,
 	}
 );
 
