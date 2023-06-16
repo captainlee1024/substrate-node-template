@@ -14,8 +14,40 @@ mod tests;
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
 
+use frame_system::offchain::{AppCrypto, CreateSignedTransaction, SendSignedTransaction, Signer};
+use sp_core::crypto::KeyTypeId;
+
+pub const KEY_TYPE: KeyTypeId = KeyTypeId(*b"ocwd");
+pub mod crypto {
+	use super::KEY_TYPE;
+	use sp_core::sr25519::Signature as Sr25519Signature;
+	use sp_runtime::{
+		app_crypto::{app_crypto, sr25519},
+		traits::Verify,
+		MultiSignature, MultiSigner,
+	};
+
+	app_crypto!(sr25519, KEY_TYPE);
+	pub struct OcwAuthId;
+
+	impl frame_system::offchain::AppCrypto<MultiSigner, MultiSignature> for OcwAuthId {
+		type RuntimeAppPublic = Public;
+		type GenericPublic = sp_core::sr25519::Public;
+		type GenericSignature = sp_core::sr25519::Signature;
+	}
+
+	impl frame_system::offchain::AppCrypto<<Sr25519Signature as Verify>::Signer, Sr25519Signature>
+		for OcwAuthId
+	{
+		type RuntimeAppPublic = Public;
+		type GenericPublic = sp_core::sr25519::Public;
+		type GenericSignature = sp_core::sr25519::Signature;
+	}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
+	use super::*;
 	use frame_support::{inherent::Vec, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
 	use serde::{Deserialize, Deserializer};
@@ -27,6 +59,7 @@ pub mod pallet {
 		},
 		traits::Zero,
 	};
+	use sp_std::vec;
 
 	// 处理获取到的Github上的数据
 	#[derive(Deserialize, Encode, Decode)]
@@ -65,9 +98,10 @@ pub mod pallet {
 
 	/// Configure the pallet by specifying the parameters and types on which it depends.
 	#[pallet::config]
-	pub trait Config: frame_system::Config {
+	pub trait Config: frame_system::Config + CreateSignedTransaction<Call<Self>> {
 		/// Because this pallet emits events, it depends on the runtime's definition of an event.
 		type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+		type AuthorityId: AppCrypto<Self::Public, Self::Signature>;
 	}
 
 	// The pallet's runtime storage items.
@@ -140,6 +174,15 @@ pub mod pallet {
 				},
 			}
 		}
+
+		// 提供给ocw调用的extrinsic call
+		#[pallet::call_index(2)]
+		#[pallet::weight(10_000)]
+		pub fn submit_data(origin: OriginFor<T>, payload: Vec<u8>) -> DispatchResultWithPostInfo {
+			let _who = ensure_signed(origin)?;
+			log::info!("OCW ==> in submit_data call: {:?}", payload);
+			Ok(().into())
+		}
 	}
 
 	/// Local Storage 作用：
@@ -150,6 +193,42 @@ pub mod pallet {
 	///   Storage里
 	/// 的数据进行同步, 所以有些有并发访问的数据需要lock
 
+	#[pallet::hooks]
+	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+		fn offchain_worker(block_number: T::BlockNumber) {
+			log::info!("OCW ==> Hello World from offchain workers!: {:?}", block_number);
+
+			let payload: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8];
+			_ = Self::send_signed_tx(payload);
+
+			log::info!("OCW ==> Leave from offchain workers!: {:?}", block_number);
+		}
+	}
+
+	impl<T: Config> Pallet<T> {
+		fn send_signed_tx(payload: Vec<u8>) -> Result<(), &'static str> {
+			let signer = Signer::<T, T::AuthorityId>::all_accounts();
+			if !signer.can_sign() {
+				return Err(
+					"No local acounts available. Consider adding one via `author_insertKey` RPC.",
+				)
+			}
+
+			let results = signer
+				.send_signed_transaction(|_account| Call::submit_data { payload: payload.clone() });
+
+			for (acc, res) in &results {
+				match res {
+					Ok(()) => log::info!("[{:?}] Submitted data: {:?}", acc.id, payload),
+					Err(e) => log::error!("[{:?}] Failed to submit transaction: {:?}", acc.id, e),
+				}
+			}
+
+			Ok(())
+		}
+	}
+
+	/*
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn offchain_worker(block_number: T::BlockNumber) {
@@ -302,4 +381,6 @@ pub mod pallet {
 			})
 		}
 	}
+
+	 */
 }
