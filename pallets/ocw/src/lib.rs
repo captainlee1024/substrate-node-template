@@ -18,10 +18,47 @@ mod benchmarking;
 pub mod pallet {
 	use frame_support::{inherent::Vec, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
+	use serde::{Deserialize, Deserializer};
 	use sp_runtime::{
-		offchain::storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+		offchain::{
+			http,
+			storage::{MutateStorageError, StorageRetrievalError, StorageValueRef},
+			Duration,
+		},
 		traits::Zero,
 	};
+
+	// 处理获取到的Github上的数据
+	#[derive(Deserialize, Encode, Decode)]
+	struct GithubInfo {
+		#[serde(deserialize_with = "de_string_to_bytes")]
+		login: Vec<u8>,
+		#[serde(deserialize_with = "de_string_to_bytes")]
+		blog: Vec<u8>,
+		public_repos: u32,
+	}
+
+	pub fn de_string_to_bytes<'de, D>(de: D) -> Result<Vec<u8>, D::Error>
+	where
+		D: Deserializer<'de>,
+	{
+		let s: &str = Deserialize::deserialize(de)?;
+		Ok(s.as_bytes().to_vec())
+	}
+
+	// 实现 fmt::Debug 将字节数组转成string更好看一些
+	use core::{convert::TryInto, fmt};
+	impl fmt::Debug for GithubInfo {
+		fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+			write!(
+				f,
+				"{{ login: {}, blog: {}, public_repos: {} }}",
+				sp_std::str::from_utf8(&self.login).map_err(|_| fmt::Error)?,
+				sp_std::str::from_utf8(&self.blog).map_err(|_| fmt::Error)?,
+				&self.public_repos
+			)
+		}
+	}
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -118,6 +155,21 @@ pub mod pallet {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			log::info!("OCW ==> Hello World from offchain workers!: {:?}", block_number);
 
+			// if let Ok(info) = Self::fetch_github_info() {
+			// 	log::info!("OCW ==> Github Info: {:?}", info);
+			// } else {
+			// 	log::info!("OCW ==> Error while fetch github info!");
+			// }
+
+			match Self::fetch_github_info() {
+				Ok(info) => {
+					log::info!("OCW ==> Github Info: {:?}", info);
+				},
+				Err(err) => {
+					log::info!("OCW ==> Error while fetch github info, Err: {:?}", err);
+				},
+			}
+
 			/*
 			// 出块时间是6s, 这里睡眠8s来让offchain worker跨块执行
 			let timeout =
@@ -126,6 +178,7 @@ pub mod pallet {
 			sp_io::offchain::sleep_until(timeout);
 			 */
 
+			/*
 			// 在奇数块写, 偶数块读
 			if block_number % 2u32.into() != Zero::zero() {
 				// odd
@@ -172,6 +225,8 @@ pub mod pallet {
 				}
 			}
 
+			 */
+
 			log::info!("OCW ==> Leave from offchain workers!: {:?}", block_number);
 		}
 
@@ -197,6 +252,42 @@ pub mod pallet {
 			Weight::from_parts(0, 0)
 		}
 		 */
+	}
+
+	impl<T: Config> Pallet<T> {
+		fn fetch_github_info() -> Result<GithubInfo, http::Error> {
+			// prepare for send request
+			let deadline = sp_io::offchain::timestamp().add(Duration::from_millis(8_000));
+			let request = http::Request::get("https://api.github.com/orgs/substrate-developer-hub");
+			let pending = request
+				.add_header("User-Agent", "Substrate-Offchain-Worker")
+				.deadline(deadline)
+				.send()
+				.map_err(|_| http::Error::IoError)?;
+
+			// send and waiting resp
+			let response =
+				pending.try_wait(deadline).map_err(|_| http::Error::DeadlineReached)??;
+			if response.code != 200 {
+				log::info!("Unexpected status code: {}", response.code);
+				return Err(http::Error::Unknown)
+			}
+
+			// 获取到数据, 将body数据收集到Vec<u8>
+			let body = response.body().collect::<Vec<u8>>();
+			// 转成str
+			let body_str = sp_std::str::from_utf8(&body).map_err(|_| {
+				log::info!("No UTF8 body");
+				http::Error::Unknown
+			})?;
+
+			// parse the response str
+			// serde_json 将str转换成GithubInfo结构体
+			let gh_info: GithubInfo =
+				serde_json::from_str(body_str).map_err(|_| http::Error::Unknown)?;
+
+			Ok(gh_info)
+		}
 	}
 
 	impl<T: Config> Pallet<T> {
