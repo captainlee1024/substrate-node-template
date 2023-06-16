@@ -16,8 +16,9 @@ mod benchmarking;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use frame_support::pallet_prelude::*;
+	use frame_support::{inherent::Vec, pallet_prelude::*};
 	use frame_system::pallet_prelude::*;
+	use sp_runtime::{offchain::storage::StorageValueRef, traits::Zero};
 
 	#[pallet::pallet]
 	pub struct Pallet<T>(_);
@@ -101,16 +102,57 @@ pub mod pallet {
 		}
 	}
 
+	/// Local Storage 作用：
+	/// - Offchain Worker 可直接读写Local Storage
+	/// - 链上代码可通过 Indexing 功能直接向 Local Storage 写数据但是不能读
+	///   (可信源的数据可以流想不可信源, 但是可信源不能从不可信源获取数据)
+	/// - 可用于Offchain Worker tasks之间的通信和协调, 多个offchain Worker可同时存在, 并通过Local
+	///   Storage里
+	/// 的数据进行同步, 所以有些有并发访问的数据需要lock
+
 	#[pallet::hooks]
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			log::info!("OCW ==> Hello World from offchain workers!: {:?}", block_number);
 
+			/*
 			// 出块时间是6s, 这里睡眠8s来让offchain worker跨块执行
 			let timeout =
 				sp_io::offchain::timestamp().add(sp_runtime::offchain::Duration::from_millis(8000));
 
 			sp_io::offchain::sleep_until(timeout);
+			 */
+
+			// 在奇数块写, 偶数块读
+			if block_number % 2u32.into() != Zero::zero() {
+				// odd
+				let key = Self::derive_key(block_number);
+				let val_ref = StorageValueRef::persistent(&key);
+
+				// get a local random value
+				let random_slice = sp_io::offchain::random_seed();
+
+				// get a local timestamp
+				let timestamp_u64 = sp_io::offchain::timestamp().unix_millis();
+
+				// combine to a tuple and print it
+				let value = (random_slice, timestamp_u64);
+				log::info!("OCW ==> in odd block, value to write: {:?}", value);
+
+				// write or mutate tuple content to key
+				val_ref.set(&value);
+			} else {
+				// even
+				let key = Self::derive_key(block_number - 1u32.into());
+				let mut val_ref = StorageValueRef::persistent(&key);
+
+				// get from db by key
+				if let Ok(Some(value)) = val_ref.get::<([u8; 32], u64)>() {
+					log::info!("OCW ==> in even block, value read: {:?}", value);
+					// delete that key
+					val_ref.clear();
+				}
+			}
 
 			log::info!("OCW ==> Leave from offchain workers!: {:?}", block_number);
 		}
@@ -137,5 +179,18 @@ pub mod pallet {
 			Weight::from_parts(0, 0)
 		}
 		 */
+	}
+
+	impl<T: Config> Pallet<T> {
+		#[deny(clippy::clone_duble_ref)]
+		fn derive_key(block_number: T::BlockNumber) -> Vec<u8> {
+			block_number.using_encoded(|encoded_bn| {
+				b"node-template::storage::"
+					.iter()
+					.chain(encoded_bn)
+					.copied()
+					.collect::<Vec<u8>>()
+			})
+		}
 	}
 }
