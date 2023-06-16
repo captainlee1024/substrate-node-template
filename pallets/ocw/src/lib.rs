@@ -105,8 +105,17 @@ pub mod pallet {
 	impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
 		fn offchain_worker(block_number: T::BlockNumber) {
 			log::info!("OCW ==> Hello World from offchain workers!: {:?}", block_number);
+
+			// 出块时间是6s, 这里睡眠8s来让offchain worker跨块执行
+			let timeout =
+				sp_io::offchain::timestamp().add(sp_runtime::offchain::Duration::from_millis(8000));
+
+			sp_io::offchain::sleep_until(timeout);
+
+			log::info!("OCW ==> Leave from offchain workers!: {:?}", block_number);
 		}
 
+		/*
 		// 块初始化时候执行
 		// 在 Starting consensus session on top of parent pre_hash 之后开始执行
 		fn on_initialize(_n: T::BlockNumber) -> Weight {
@@ -127,5 +136,6 @@ pub mod pallet {
 			log::info!("OCW ==> in on_idle!");
 			Weight::from_parts(0, 0)
 		}
+		 */
 	}
 }
